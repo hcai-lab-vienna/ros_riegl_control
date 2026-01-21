@@ -1,0 +1,3 @@
+[submodule "src/ros-riegl-vz"]
+	path = src/ros-riegl-vz
+	url = https://github.com/riegllms/ros-riegl-vz.git
