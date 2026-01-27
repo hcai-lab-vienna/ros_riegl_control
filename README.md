@@ -2,7 +2,7 @@
 
 ## Install
 Follow [ros-riegl-vz](https://github.com/riegllms/ros-riegl-vz)
-Requirments for ROS2 jazzy:
+Requirements for ROS2 jazzy:
 ```bash
 sudo apt install ros-jazzy-tf2-tools ros-jazzy-tf-transformations python3-pip python3-paramiko python3-scp python3-protobuf python3-empy python3-lark python3-numpy python3-transforms3d
 ```
@@ -11,7 +11,7 @@ And clone repo with all submodules:
 ```bash
 git clone --recurse-submodules https://github.com/hcai-lab-vienna/ros_bunker_control.git
 ```
-or if you cloned the repo befor reading this, download all submodules like this:
+or if you cloned the repo before reading this, download all submodules like this:
 ```bash
 git submodule update --init --remote --recursive
 ```
@@ -20,10 +20,19 @@ Then do:
 ```bash
 pip3 install --user --break-system-packages src/ros-riegl-vz/librdb/riegl.rdb-2.5.3-py3-none-linux_x86_64.whl
 ```
+and run the following script in project root to fix a issue in the riegl repo:
+```bash
+./fix_riegl_typo.sh
+```
 
 
 ## Configuration
 The configuration file for the scanner is `install/riegl_vz/share/riegl_vz/config/params.yaml` older configurations are saved in `configs`.
+
+Apply new configs after compilation from project root with:
+```bash
+./apply_params.sh <path to a params.yaml>
+```
 
 
 ## Commands
