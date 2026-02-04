@@ -1,3 +1,9 @@
 [submodule "src/ros-riegl-vz"]
 	path = src/ros-riegl-vz
 	url = https://github.com/riegllms/ros-riegl-vz.git
+[submodule "src/bunker_ros2"]
+	path = src/bunker_ros2
+	url = https://github.com/agilexrobotics/bunker_ros2.git
+[submodule "src/ugv_sdk"]
+	path = src/ugv_sdk
+	url = https://github.com/agilexrobotics/ugv_sdk.git
