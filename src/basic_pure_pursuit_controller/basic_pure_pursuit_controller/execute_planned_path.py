@@ -53,13 +53,13 @@ class ExecutePlannedPath(Node):
     def __init__(self):
         super().__init__("follow_planned_path")
         self.declare_parameter("goal_topic", "/controller_goal")
-        self.declare_parameter("srv_service", "/scan")
+        self.declare_parameter("scan_service", "/scan")
         self.declare_parameter("pose_service", "/get_pose")
         self.declare_parameter("odom_frame_id", "odom")
         self.declare_parameter("map_frame_id", "map")
 
         self.goal_topic = str(self.get_parameter("goal_topic").value)
-        self.srv_service = str(self.get_parameter("srv_service").value)
+        self.scan_service = str(self.get_parameter("scan_service").value)
         self.pose_service = str(self.get_parameter("pose_service").value)
         self.odom_frame_id = str(self.get_parameter("odom_frame_id").value)
         self.map_frame_id = str(self.get_parameter("map_frame_id").value)
@@ -69,7 +69,7 @@ class ExecutePlannedPath(Node):
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
 
         self.goal_pub = self.create_publisher(PoseStamped, self.goal_topic, 10)
-        self.srv = self.create_client(Trigger, self.srv_service)
+        self.srv = self.create_client(Trigger, self.scan_service)
         self.get_pose = self.create_client(GetPose, self.pose_service)
 
         self.path = Path()
