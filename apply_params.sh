@@ -1,6 +1,6 @@
 #!/bin/bash
 if [ $# -eq 0 ]; then
-	echo "please provided param file as argument"
+	echo "please provided param file as argument, they should be located at ./params"
 fi
 SOURCE_FILE="$1"
 TARGET_PATH="install/riegl_vz/share/riegl_vz/config/"
