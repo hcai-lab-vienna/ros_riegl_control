@@ -4,6 +4,7 @@ from time import sleep
 
 import rclpy
 import tf_transformations as tf_trans
+from diagnostic_msgs.msg import DiagnosticArray
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry, Path
 from rclpy.node import Node
@@ -24,9 +25,10 @@ from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 class State(Enum):
     WAIT_FOR_PATH = 0
     RIEGL_SCAN = 1
-    MAP_TF_UPDATE = 2
-    SEND_WAYPOINT = 3
-    WAIT_TO_REACH_WAYPOINT = 4
+    WAIT_FOR_RIEGL_SCAN = 2
+    MAP_TF_UPDATE = 3
+    SEND_WAYPOINT = 4
+    WAIT_TO_REACH_WAYPOINT = 5
 
 
 def transform_to_matrix(transform):
@@ -53,12 +55,14 @@ class ExecutePlannedPath(Node):
     def __init__(self):
         super().__init__("follow_planned_path")
         self.declare_parameter("goal_topic", "/controller_goal")
+        self.declare_parameter("goal_active_srv", "/is_goal_active")
         self.declare_parameter("scan_service", "/scan")
-        self.declare_parameter("pose_service", "/get_pose")
+        self.declare_parameter("pose_service", "/get_vop")
         self.declare_parameter("odom_frame_id", "odom")
         self.declare_parameter("map_frame_id", "map")
 
         self.goal_topic = str(self.get_parameter("goal_topic").value)
+        self.goal_active_srv = str(self.get_parameter("goal_active_srv").value)
         self.scan_service = str(self.get_parameter("scan_service").value)
         self.pose_service = str(self.get_parameter("pose_service").value)
         self.odom_frame_id = str(self.get_parameter("odom_frame_id").value)
@@ -69,7 +73,8 @@ class ExecutePlannedPath(Node):
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
 
         self.goal_pub = self.create_publisher(PoseStamped, self.goal_topic, 10)
-        self.srv = self.create_client(Trigger, self.scan_service)
+        self.is_goal_active_srv = self.create_client(Trigger, self.goal_active_srv)
+        self.scan_trigger = self.create_client(Trigger, self.scan_service)
         self.get_pose = self.create_client(GetPose, self.pose_service)
 
         self.path = Path()
@@ -77,7 +82,7 @@ class ExecutePlannedPath(Node):
             next_waypoint = PoseStamped()
             next_waypoint.header.frame_id = "map"
             next_waypoint.pose.position.x = float(i + 1)
-            next_waypoint.pose.position.y = (i + 1) / 2.0
+            # next_waypoint.pose.position.y = (i + 1) / 2.0
             self.path.poses.append(next_waypoint)
 
         # Node State
@@ -86,6 +91,7 @@ class ExecutePlannedPath(Node):
         self.cur_wpt_idx = 0
 
         self.is_goal_active_future = None
+        self.get_pose_future = None
         self.timer = self.create_timer(0.2, self.step_plan)
 
         self.get_logger().info(f"Node Ready. Stepping through plan")
@@ -131,17 +137,36 @@ class ExecutePlannedPath(Node):
 
     def trigger_riegl_scan(self):
         self.get_logger().info(f"Triggered Riegl scan ...")
-        self.is_goal_active_future = self.srv.call_async(Trigger.Request())
-        self.cur_state = State.MAP_TF_UPDATE
+        self.is_scan_triggered_future = self.scan_trigger.call_async(Trigger.Request())
+        self.cur_state = State.WAIT_FOR_RIEGL_SCAN
         return True
 
+    def wait_for_riegl_scan(self):
+        received, msg = wait_for_message(DiagnosticArray, self, "/diagnostics")
+        if not received:
+            return
+
+        scanner_status = [
+            stat for stat in msg.status if stat.name == "riegl_vz_node: scanner"
+        ]
+        if len(scanner_status) == 0:
+            return
+
+        scan_opstate = {val.key: val.value for val in scanner_status[0].values}[
+            "opstate"
+        ]
+        if scan_opstate == "waiting":
+            self.cur_state = State.MAP_TF_UPDATE
+
     def riegl_map_update(self):
-        # GetPose.srv
-        # ---
-        # geometry_msgs/PoseStamped pose
-        # bool success   # indicate successful run of service
-        # string message # informational, e.g. for error messages
-        response = self.get_pose.call(GetPose.Request())
+        if self.get_pose_future is None:
+            self.get_pose_future = self.get_pose.call_async(GetPose.Request())
+
+        if not self.get_pose_future.done():
+            return
+
+        response = self.get_pose_future.result()
+        self.get_pose_future = None
         if response is None or not response.success:
             self.get_logger().warning(
                 f"Did not receive any pose update from the Riegl. No correction applied to accumulated drift."
@@ -158,6 +183,10 @@ class ExecutePlannedPath(Node):
         transform_map_to_base_link.transform.translation.z = ps.pose.position.z
         transform_map_to_base_link.transform.rotation = ps.pose.orientation
 
+        print("transform_map_to_base_link")
+        print(transform_map_to_base_link)
+        print()
+
         try:
             transform_base_link_to_odom = self.tf_buffer.lookup_transform(
                 "base_link",
@@ -171,10 +200,18 @@ class ExecutePlannedPath(Node):
             )
             return
 
+        print("transform_base_link_to_odom")
+        print(transform_base_link_to_odom)
+        print()
+
         # Compose the transforms
         composed_transform_stamped = self.compose_transforms(
             transform_map_to_base_link, transform_base_link_to_odom
         )
+
+        print("composed_transform_stamped")
+        print(composed_transform_stamped)
+        print()
 
         # Broadcast map-odom tf transform
         self.tf_static_broadcaster.sendTransform(composed_transform_stamped)
@@ -189,7 +226,9 @@ class ExecutePlannedPath(Node):
         )
         self.goal_pub.publish(waypoint)
         self.nav_goal_active = True
-        self.trigger_riegl_scan()
+        self.is_goal_active_future = self.is_goal_active_srv.call_async(
+            Trigger.Request()
+        )
         self.cur_state = State.WAIT_TO_REACH_WAYPOINT
 
     def wait_to_reach_waypoint(self):
@@ -206,7 +245,10 @@ class ExecutePlannedPath(Node):
                 self.cur_state = State.WAIT_FOR_PATH
             else:
                 self.cur_state = State.RIEGL_SCAN
-        self.trigger_riegl_scan()
+
+        self.is_goal_active_future = self.is_goal_active_srv.call_async(
+            Trigger.Request()
+        )
 
     def step_plan(self):
         self.get_logger().info(
@@ -215,6 +257,7 @@ class ExecutePlannedPath(Node):
         {
             State.WAIT_FOR_PATH: self.wait_for_path,
             State.RIEGL_SCAN: self.trigger_riegl_scan,
+            State.WAIT_FOR_RIEGL_SCAN: self.wait_for_riegl_scan,
             State.MAP_TF_UPDATE: self.riegl_map_update,
             State.SEND_WAYPOINT: self.navigate_to_next_waypoint,
             State.WAIT_TO_REACH_WAYPOINT: self.wait_to_reach_waypoint,

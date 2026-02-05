@@ -1,0 +1,36 @@
+riegl_vz_node:
+  ros__parameters:
+    hostname: "10.0.1.1"
+    ssh_user: "user"
+    ssh_password: "user"
+    working_dir: "/tmp/ros_riegl_vz"
+    project_name: "parkplatz_robot_move_outside"
+    scanpos_name: ""
+    storage_media: 0
+    meas_program: 3
+    scan_pattern_name: ""
+    scan_pattern: [30.0, 130.0, 0.04, 0.0, 360.0, 0.04]
+    scan_publish: False
+    scan_publish_filter: ""
+    scan_publish_lod: 8
+    scan_register: True
+    scan_registration_mode: 1
+    pose_publish: True
+    pose_publish_fast: True
+    voxel_publish: True
+    reflector_search: False
+    reflector_search_models: "RIEGL flat reflector 50 mm"
+    reflector_search_limits: [1.0, 100.0]
+    control_points_csv_file_remote: ""
+    control_points_csv_file_local: ""
+    control_points_coord_system: "EPSG::4978"
+    image_capture: 1
+    image_capture_mode: 1
+    image_capture_overlap: 25
+    set_pose_topic: ""
+    robot_relative_pose: False
+    robot_scanner_mounting: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    robot_project_frame_id: ""
+    robot_scanner_project_transform: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    imu_data_publish: False
+    imu_index: 0

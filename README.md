@@ -4,7 +4,7 @@
 Follow [ros-riegl-vz](https://github.com/riegllms/ros-riegl-vz)
 Requirements for ROS2 jazzy:
 ```bash
-sudo apt install ros-jazzy-tf2-tools ros-jazzy-tf-transformations python3-pip python3-paramiko python3-scp python3-protobuf python3-empy python3-lark python3-numpy python3-transforms3d
+sudo apt install ros-jazzy-tf2-tools ros-jazzy-tf-transformations ros-jazz-diagnostics python3-pip python3-paramiko python3-scp python3-protobuf python3-empy python3-lark python3-numpy python3-transforms3d
 ```
 
 And clone repo with all submodules:
@@ -20,7 +20,7 @@ Then do:
 ```bash
 pip3 install --user --break-system-packages src/ros-riegl-vz/librdb/riegl.rdb-2.5.3-py3-none-linux_x86_64.whl
 ```
-and run the following script in project root to fix a issue in the riegl repo:
+and run the following script in project root after building to fix a issue in the riegl repo:
 ```bash
 ./fix_riegl_typo.sh
 ```
@@ -41,6 +41,9 @@ For documentation, some commands that have previously been used:
 ros2 launch riegl_vz std_launch.py # start scanner server
 ros2 service call /scan std_srvs/srv/Trigger # start scan
 ros2 service call /get_scan_poses riegl_vz_interfaces/srv/GetScanPose # get position
+ros2 service call /get_pose riegl_vz_interfaces/srv/GetPose # different ways to get pose
+ros2 service call /get_pop riegl_vz_interfaces/srv/GetPose
+ros2 service call /get_sopv riegl_vz_interfaces/srv/GetPose
 ros2 topic echo /gnss
 ros2 topic echo /pose
 ```
@@ -70,11 +73,7 @@ ros2 topic echo /pose
 
 Requirments are [ROS2 jazzy](https://docs.ros.org/en/jazzy/Installation.html) (newer should also work) and:
 ```bash
-sudo apt install build-essential git cmake libasio-dev can-utils
-```
-and
-```bash
-sudo apt install ros-jazzy-nav2-msgs
+sudo apt install build-essential git cmake libasio-dev can-utils ros-jazzy-nav2-msgs
 ```
 
 First clone repo with all submodules:

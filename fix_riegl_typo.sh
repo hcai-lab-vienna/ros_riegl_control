@@ -1,2 +1,2 @@
 #!/bin/bash
-cp fix/project.py src/ros-riegl-vz/riegl_vz/riegl_vz/project.py
+cp fix/project.py install/riegl_vz/lib/python3.*/site-packages/riegl_vz/project.py
