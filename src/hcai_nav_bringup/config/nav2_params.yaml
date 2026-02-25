@@ -1,11 +1,13 @@
 map_server:
   ros__parameters:
     #yaml_filename: "/hcai_nav2_bringup/maps/empty.yaml" Set with launch params
+    frame_id: 'odom'
 
 # Controller Server
 controller_server:
   ros__parameters:
-    use_sim_time: true
+    enable_stamped_cmd_vel: false
+    use_sim_time: false
     controller_frequency: 20.0
     costmap_update_timeout: 1.
     min_x_velocity_threshold: 0.001
@@ -24,37 +26,39 @@ controller_server:
       enable_obstacle_checking: true
       use_interpolation: true
       transform_tolerance: 0.2
-      costmap_queue_size: 3
-      costmap_window_size: 3
+      costmap_queue_size: 1
+      costmap_window_size: 1
 
 # Local Costmap
 local_costmap:
   local_costmap:
     ros__parameters:
       #filters: ['']
-      update_frequency: 10.0
-      publish_frequency: 5.0
+      update_frequency: 5.0
+      publish_frequency: 1.0
       global_frame: odom
-      use_sim_time: true
+      robot_base_frame: base_link
+      use_sim_time: false
       rolling_window: true
       width: 10
       height: 10
       resolution: 0.05
       footprint: "[ [0.21, 0.195], [0.21, -0.195], [-0.21, -0.195], [-0.21, 0.195] ]"
-      # plugins: ["static_layer"]
-      plugins: ["static_layer", "inflation_layer"]
+      plugins: ["static_layer"]
+      #plugins: ["static_layer", "inflation_layer"]
       # static_layer:
       #   plugin: "nav2_costmap_2d::StaticLayer"
       #   map_subscribe_transient_local: true
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
-        map_topic: "map"
+        enabled: true
+        map_topic: "/map"
         first_map_only: true
         subscribe_to_updates: false
         map_subscribe_transient_local: true # ensures latched map delivery
-      inflation_layer:
-        plugin: "nav2_costmap_2d::InflationLayer"
-        inflation_radius: 0.55
+      #inflation_layer:
+      #  plugin: "nav2_costmap_2d::InflationLayer"
+      #  inflation_radius: 0.55
       always_send_full_costmap: true
 
 # collision_monitor:
@@ -91,6 +95,7 @@ local_costmap:
 
 velocity_smoother:
   ros__parameters:
+    enable_stamped_cmd_vel: false
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: "OPEN_LOOP"
@@ -100,7 +105,6 @@ velocity_smoother:
     max_decel: [-2.5, 0.0, -3.2]
     odom_topic: "/odom"
     odom_duration: 0.1
-    enable_stamped_cmd_vel: true
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
     stamp_smoothed_velocity_with_smoothing_time: false

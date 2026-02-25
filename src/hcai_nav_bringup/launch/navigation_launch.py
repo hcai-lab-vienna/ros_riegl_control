@@ -21,7 +21,7 @@ from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression, NotEqualsSubstitution
 from launch_ros.actions import LoadComposableNodes, Node, PushROSNamespace, SetParameter
 from launch_ros.descriptions import ComposableNode, ParameterFile
-from nav2_common.launch import LaunchConfigAsBool, RewrittenYaml
+from nav2_common.launch import RewrittenYaml
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -29,18 +29,18 @@ def generate_launch_description() -> LaunchDescription:
     hcai_nav_bringup_dir = get_package_share_directory('hcai_nav_bringup')
 
     namespace = LaunchConfiguration('namespace')
-    use_sim_time = LaunchConfigAsBool('use_sim_time')
-    autostart = LaunchConfigAsBool('autostart')
+    use_sim_time = LaunchConfiguration('use_sim_time')
+    autostart = LaunchConfiguration('autostart')
     graph_filepath = LaunchConfiguration('graph')
     params_file = LaunchConfiguration('params_file')
-    use_composition = LaunchConfigAsBool('use_composition')
-    use_intra_process_comms = LaunchConfigAsBool('use_intra_process_comms')
+    use_composition = LaunchConfiguration('use_composition')
+    use_intra_process_comms = LaunchConfiguration('use_intra_process_comms')
     container_name = LaunchConfiguration('container_name')
     container_name_full = (namespace, '/', container_name)
-    use_respawn = LaunchConfigAsBool('use_respawn')
+    use_respawn = LaunchConfiguration('use_respawn')
     log_level = LaunchConfiguration('log_level')
-    use_keepout_zones = LaunchConfigAsBool('use_keepout_zones')
-    use_speed_zones = LaunchConfigAsBool('use_speed_zones')
+    #use_keepout_zones = LaunchConfiguration('use_keepout_zones')
+    #use_speed_zones = LaunchConfiguration('use_speed_zones')
     map_yaml_file = LaunchConfiguration('map')
 
     lifecycle_nodes = [
@@ -65,8 +65,8 @@ def generate_launch_description() -> LaunchDescription:
     param_substitutions = {'autostart': autostart}
 
     yaml_substitutions = {
-        'KEEPOUT_ZONE_ENABLED': use_keepout_zones,
-        'SPEED_ZONE_ENABLED': use_speed_zones,
+        #'KEEPOUT_ZONE_ENABLED': use_keepout_zones,
+        #'SPEED_ZONE_ENABLED': use_speed_zones,
     }
 
     # RewrittenYaml: Adds namespace to the parameters file as a root key
@@ -153,15 +153,15 @@ def generate_launch_description() -> LaunchDescription:
         'log_level', default_value='info', description='log level'
     )
 
-    declare_use_keepout_zones_cmd = DeclareLaunchArgument(
-        'use_keepout_zones', default_value='False',
-        description='Whether to enable keepout zones or not'
-    )
+    #declare_use_keepout_zones_cmd = DeclareLaunchArgument(
+    #    'use_keepout_zones', default_value='False',
+    #    description='Whether to enable keepout zones or not'
+    #)
 
-    declare_use_speed_zones_cmd = DeclareLaunchArgument(
-        'use_speed_zones', default_value='True',
-        description='Whether to enable speed zones or not'
-    )
+    #declare_use_speed_zones_cmd = DeclareLaunchArgument(
+    #    'use_speed_zones', default_value='True',
+    #    description='Whether to enable speed zones or not'
+    #)
 
     declare_map_yaml_cmd = DeclareLaunchArgument(
         'map',
@@ -170,7 +170,6 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     load_nodes = GroupAction(
-        condition=IfCondition(PythonExpression(['not ', use_composition])),
         actions=[
             SetParameter('use_sim_time', use_sim_time),
             PushROSNamespace(namespace=namespace),
@@ -181,7 +180,7 @@ def generate_launch_description() -> LaunchDescription:
                 output='screen',
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[{'yaml_filename': map_yaml_file}],
+                parameters=[configured_params, {'yaml_filename': map_yaml_file}],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings,
             ),
@@ -195,71 +194,6 @@ def generate_launch_description() -> LaunchDescription:
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
             ),
-            # Node(
-            #     package='nav2_smoother',
-            #     executable='smoother_server',
-            #     name='smoother_server',
-            #     output='screen',
-            #     respawn=use_respawn,
-            #     respawn_delay=2.0,
-            #     parameters=[configured_params],
-            #     arguments=['--ros-args', '--log-level', log_level],
-            #     remappings=remappings,
-            # ),
-            # Node(
-            #     package='nav2_planner',
-            #     executable='planner_server',
-            #     name='planner_server',
-            #     output='screen',
-            #     respawn=use_respawn,
-            #     respawn_delay=2.0,
-            #     parameters=[configured_params],
-            #     arguments=['--ros-args', '--log-level', log_level],
-            #     remappings=remappings,
-            # ),
-            # Node(
-            #     package='nav2_route',
-            #     executable='route_server',
-            #     name='route_server',
-            #     output='screen',
-            #     respawn=use_respawn,
-            #     respawn_delay=2.0,
-            #     parameters=[configured_params, {'graph_filepath': graph_filepath}],
-            #     arguments=['--ros-args', '--log-level', log_level],
-            #     remappings=remappings),
-            # Node(
-            #     package='nav2_behaviors',
-            #     executable='behavior_server',
-            #     name='behavior_server',
-            #     output='screen',
-            #     respawn=use_respawn,
-            #     respawn_delay=2.0,
-            #     parameters=[configured_params],
-            #     arguments=['--ros-args', '--log-level', log_level],
-            #     remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
-            # ),
-            # Node(
-            #     package='nav2_bt_navigator',
-            #     executable='bt_navigator',
-            #     name='bt_navigator',
-            #     output='screen',
-            #     respawn=use_respawn,
-            #     respawn_delay=2.0,
-            #     parameters=[configured_params],
-            #     arguments=['--ros-args', '--log-level', log_level],
-            #     remappings=remappings,
-            # ),
-            # Node(
-            #     package='nav2_waypoint_follower',
-            #     executable='waypoint_follower',
-            #     name='waypoint_follower',
-            #     output='screen',
-            #     respawn=use_respawn,
-            #     respawn_delay=2.0,
-            #     parameters=[configured_params],
-            #     arguments=['--ros-args', '--log-level', log_level],
-            #     remappings=remappings,
-            # ),
             Node(
                 package='nav2_velocity_smoother',
                 executable='velocity_smoother',
@@ -272,39 +206,6 @@ def generate_launch_description() -> LaunchDescription:
                 remappings=remappings
                 + [('cmd_vel', 'cmd_vel_nav'), ('cmd_vel_smoothed', 'cmd_vel')],
             ),
-            # Node(
-            #     package='nav2_collision_monitor',
-            #     executable='collision_monitor',
-            #     name='collision_monitor',
-            #     output='screen',
-            #     respawn=use_respawn,
-            #     respawn_delay=2.0,
-            #     parameters=[configured_params],
-            #     arguments=['--ros-args', '--log-level', log_level],
-            #     remappings=remappings,
-            # ),
-            # Node(
-            #     package='opennav_docking',
-            #     executable='opennav_docking',
-            #     name='docking_server',
-            #     output='screen',
-            #     respawn=use_respawn,
-            #     respawn_delay=2.0,
-            #     parameters=[configured_params],
-            #     arguments=['--ros-args', '--log-level', log_level],
-            #     remappings=remappings,
-            # ),
-            # Node(
-            #     package='opennav_following',
-            #     executable='opennav_following',
-            #     name='following_server',
-            #     output='screen',
-            #     respawn=use_respawn,
-            #     respawn_delay=2.0,
-            #     parameters=[configured_params],
-            #     arguments=['--ros-args', '--log-level', log_level],
-            #     remappings=remappings,
-            # ),
             Node(
                 package='nav2_lifecycle_manager',
                 executable='lifecycle_manager',
@@ -313,7 +214,8 @@ def generate_launch_description() -> LaunchDescription:
                 arguments=['--ros-args', '--log-level', log_level],
                 parameters=[
                     configured_params,
-                    {'autostart': autostart}, {'node_names': lifecycle_nodes}
+                    {'autostart': autostart}, 
+                    {'node_names': lifecycle_nodes}
                 ],
             ),
         ],
@@ -337,8 +239,8 @@ def generate_launch_description() -> LaunchDescription:
     ld.add_action(declare_container_name_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
-    ld.add_action(declare_use_keepout_zones_cmd)
-    ld.add_action(declare_use_speed_zones_cmd)
+    #ld.add_action(declare_use_keepout_zones_cmd)
+    #ld.add_action(declare_use_speed_zones_cmd)
     # Add the actions to launch all of the navigation nodes
     ld.add_action(load_nodes)
     # ld.add_action(load_composable_nodes)
