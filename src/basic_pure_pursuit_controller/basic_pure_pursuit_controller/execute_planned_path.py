@@ -6,7 +6,9 @@ import rclpy
 import tf_transformations as tf_trans
 from diagnostic_msgs.msg import DiagnosticArray
 from geometry_msgs.msg import PoseStamped
+from nav2_msgs.action import FollowPath
 from nav_msgs.msg import Odometry, Path
+from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.wait_for_message import wait_for_message
 from riegl_vz_interfaces.srv import GetPose
@@ -54,15 +56,13 @@ def transform_to_matrix(transform):
 class ExecutePlannedPath(Node):
     def __init__(self):
         super().__init__("follow_planned_path")
-        self.declare_parameter("goal_topic", "/controller_goal")
-        self.declare_parameter("goal_active_srv", "/is_goal_active")
+        self.declare_parameter("follow_path_server", "/follow_path")
         self.declare_parameter("scan_service", "/scan")
         self.declare_parameter("pose_service", "/get_vop")
         self.declare_parameter("odom_frame_id", "odom")
         self.declare_parameter("map_frame_id", "map")
 
-        self.goal_topic = str(self.get_parameter("goal_topic").value)
-        self.goal_active_srv = str(self.get_parameter("goal_active_srv").value)
+        self.follow_path_server = str(self.get_parameter("follow_path_server").value)
         self.scan_service = str(self.get_parameter("scan_service").value)
         self.pose_service = str(self.get_parameter("pose_service").value)
         self.odom_frame_id = str(self.get_parameter("odom_frame_id").value)
@@ -72,8 +72,7 @@ class ExecutePlannedPath(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
 
-        self.goal_pub = self.create_publisher(PoseStamped, self.goal_topic, 10)
-        self.is_goal_active_srv = self.create_client(Trigger, self.goal_active_srv)
+        self.follow_path_action_client = ActionClient(self, FollowPath, self.follow_path_server)
         self.scan_trigger = self.create_client(Trigger, self.scan_service)
         self.get_pose = self.create_client(GetPose, self.pose_service)
 
@@ -87,10 +86,9 @@ class ExecutePlannedPath(Node):
 
         # Node State
         self.cur_state = State.WAIT_FOR_PATH
-        self.nav_goal_active = False
         self.cur_wpt_idx = 0
 
-        self.is_goal_active_future = None
+        self.follow_path_future = None
         self.get_pose_future = None
         self.timer = self.create_timer(0.2, self.step_plan)
 
@@ -224,19 +222,17 @@ class ExecutePlannedPath(Node):
         self.get_logger().info(
             f"Navigating to the next waypoint {self.cur_wpt_idx}: ({waypoint.pose.position.x:.2f}, {waypoint.pose.position.y:.2f} in {waypoint.header.frame_id})"
         )
-        self.goal_pub.publish(waypoint)
-        self.nav_goal_active = True
-        self.is_goal_active_future = self.is_goal_active_srv.call_async(
-            Trigger.Request()
-        )
+
+        follow_path_goal = FollowPath.Goal()
+        follow_path_goal.path.header.frame_id = "odom"
+        follow_path_goal.path.poses.append(waypoint)
+        self.follow_path_action_client.wait_for_server()
+        self.follow_path_future = self.follow_path_action_client.send_goal_async(follow_path_goal)
+
         self.cur_state = State.WAIT_TO_REACH_WAYPOINT
 
     def wait_to_reach_waypoint(self):
-        if self.is_goal_active_future.done():
-            res = self.is_goal_active_future.result()
-            self.nav_goal_active = res.success
-
-        if not self.nav_goal_active:
+        if self.follow_path_future.done():
             self.get_logger().info(f"Reached waypoint {self.cur_wpt_idx}.")
             self.cur_wpt_idx += 1
             if (self.cur_wpt_idx) == len(self.path.poses):
@@ -245,10 +241,6 @@ class ExecutePlannedPath(Node):
                 self.cur_state = State.WAIT_FOR_PATH
             else:
                 self.cur_state = State.RIEGL_SCAN
-
-        self.is_goal_active_future = self.is_goal_active_srv.call_async(
-            Trigger.Request()
-        )
 
     def step_plan(self):
         self.get_logger().info(
