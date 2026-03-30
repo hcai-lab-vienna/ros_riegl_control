@@ -3,7 +3,6 @@ from enum import Enum
 from time import sleep
 
 import rclpy
-import tf_transformations as tf_trans
 from diagnostic_msgs.msg import DiagnosticArray
 from geometry_msgs.msg import PoseStamped
 from nav2_msgs.action import FollowPath
@@ -11,7 +10,6 @@ from nav_msgs.msg import Odometry, Path
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.wait_for_message import wait_for_message
-from riegl_vz_interfaces.srv import GetPose
 from std_srvs.srv import Trigger
 from tf2_ros import (
     Buffer,
@@ -23,6 +21,7 @@ from tf2_ros import (
 )
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
+from path_utils import *
 
 class State(Enum):
     WAIT_FOR_PATH = 0
@@ -33,26 +32,6 @@ class State(Enum):
     WAIT_TO_REACH_WAYPOINT = 5
 
 
-def transform_to_matrix(transform):
-    """
-    Convert a TransformStamped to a 4x4 matrix.
-    """
-    translation = [
-        transform.transform.translation.x,
-        transform.transform.translation.y,
-        transform.transform.translation.z,
-    ]
-    rotation = [
-        transform.transform.rotation.x,
-        transform.transform.rotation.y,
-        transform.transform.rotation.z,
-        transform.transform.rotation.w,
-    ]
-    return tf_trans.translation_matrix(translation) @ tf_trans.quaternion_matrix(
-        rotation
-    )
-
-
 class ExecutePlannedPath(Node):
     def __init__(self):
         super().__init__("follow_planned_path")
@@ -61,6 +40,11 @@ class ExecutePlannedPath(Node):
         self.declare_parameter("pose_service", "/get_vop")
         self.declare_parameter("odom_frame_id", "odom")
         self.declare_parameter("map_frame_id", "map")
+        self.declare_parameter("fake_riegl", False)
+
+        self.fake_riegl = self.get_parameter("fake_riegl").value
+        print(self.get_parameter("map_frame_id").value)
+        print(self.get_parameter("fake_riegl").value)
 
         self.follow_path_server = str(self.get_parameter("follow_path_server").value)
         self.scan_service = str(self.get_parameter("scan_service").value)
@@ -74,70 +58,50 @@ class ExecutePlannedPath(Node):
 
         self.follow_path_action_client = ActionClient(self, FollowPath, self.follow_path_server)
         self.scan_trigger = self.create_client(Trigger, self.scan_service)
-        self.get_pose = self.create_client(GetPose, self.pose_service)
+        if not self.fake_riegl:
+            from riegl_vz_interfaces.srv import GetPose
+            self.get_pose = self.create_client(GetPose, self.pose_service)
 
-        self.path = Path()
-        for i in range(2):
-            next_waypoint = PoseStamped()
-            next_waypoint.header.frame_id = "map"
-            next_waypoint.pose.position.x = float(i + 1)
-            # next_waypoint.pose.position.y = (i + 1) / 2.0
-            self.path.poses.append(next_waypoint)
+        self.map_waypoints = [
+            (1.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+        ]
+        # for i in range(2):
+        #     next_waypoint = PoseStamped()
+        #     next_waypoint.header.frame_id = "map"
+        #     next_waypoint.pose.position.x = float(i + 1)
+        #     # next_waypoint.pose.position.y = (i + 1) / 2.0
+        #     self.map_waypoints.poses.append(next_waypoint)
 
         # Node State
         self.cur_state = State.WAIT_FOR_PATH
         self.cur_wpt_idx = 0
 
-        self.follow_path_future = None
+        self.follow_path_future_goal = None
+        self.follow_path_future_result = None
         self.get_pose_future = None
         self.timer = self.create_timer(0.2, self.step_plan)
 
         self.get_logger().info(f"Node Ready. Stepping through plan")
 
-    def compose_transforms(self, t1, t2):
-        """
-        Compose two TransformStamped messages: t1 * t2.
-        Returns a new TransformStamped.
-        """
-        # Convert TransformStamped to 4x4 matrices
-        m1 = transform_to_matrix(t1)
-        m2 = transform_to_matrix(t2)
-
-        # Multiply the matrices
-        m_composed = tf_trans.concatenate_matrices(m1, m2)
-
-        # Convert back to TransformStamped
-        composed_transform = TransformStamped()
-        composed_transform.header.stamp = self.get_clock().now().to_msg()
-        composed_transform.header.frame_id = t1.header.frame_id
-        composed_transform.child_frame_id = t2.child_frame_id
-
-        # Extract translation and rotation from the composed matrix
-        translation = tf_trans.translation_from_matrix(m_composed)
-        quaternion = tf_trans.quaternion_from_matrix(m_composed)
-
-        composed_transform.transform.translation.x = translation[0]
-        composed_transform.transform.translation.y = translation[1]
-        composed_transform.transform.translation.z = translation[2]
-        composed_transform.transform.rotation.x = quaternion[0]
-        composed_transform.transform.rotation.y = quaternion[1]
-        composed_transform.transform.rotation.z = quaternion[2]
-        composed_transform.transform.rotation.w = quaternion[3]
-
-        return composed_transform
-
     def wait_for_path(self):
-        if self.path is not None:
+        if self.map_waypoints is not None:
             self.cur_state = State.RIEGL_SCAN
             self.cur_wpt_idx = 0
 
         return True
 
     def trigger_riegl_scan(self):
-        self.get_logger().info(f"Triggered Riegl scan ...")
-        self.is_scan_triggered_future = self.scan_trigger.call_async(Trigger.Request())
-        self.cur_state = State.WAIT_FOR_RIEGL_SCAN
-        return True
+        if self.fake_riegl:
+            self.get_logger().info(f'Fake-triggered Riegl scan ...')
+            sleep(.5)
+            self.cur_state = State.MAP_TF_UPDATE
+            return True
+        else:
+            self.get_logger().info(f"Triggered Riegl scan ...")
+            self.is_scan_triggered_future = self.scan_trigger.call_async(Trigger.Request())
+            self.cur_state = State.WAIT_FOR_RIEGL_SCAN
+            return True
 
     def wait_for_riegl_scan(self):
         received, msg = wait_for_message(DiagnosticArray, self, "/diagnostics")
@@ -157,20 +121,33 @@ class ExecutePlannedPath(Node):
             self.cur_state = State.MAP_TF_UPDATE
 
     def riegl_map_update(self):
-        if self.get_pose_future is None:
-            self.get_pose_future = self.get_pose.call_async(GetPose.Request())
+        if self.fake_riegl:
+            # Fake it using odometry
+            received, msg = wait_for_message(Odometry, self, "/nav/odom")
 
-        if not self.get_pose_future.done():
-            return
+            if not received:
+                self.get_logger().warning(f"Did not receive any pose update from the Odometry (faking Riegl). No correction applied to accumulated drift.")
+                return False
 
-        response = self.get_pose_future.result()
-        self.get_pose_future = None
-        if response is None or not response.success:
-            self.get_logger().warning(
-                f"Did not receive any pose update from the Riegl. No correction applied to accumulated drift."
-            )
-            return False
-        ps = response.pose
+            # Create a PoseStamped for interface consistency with Riegl call
+            ps = PoseStamped()
+            ps.header = msg.header
+            ps.pose = msg.pose.pose
+        else:
+            if self.get_pose_future is None:
+                self.get_pose_future = self.get_pose.call_async(GetPose.Request())
+
+            if not self.get_pose_future.done():
+                return
+
+            response = self.get_pose_future.result()
+            self.get_pose_future = None
+            if response is None or not response.success:
+                self.get_logger().warning(
+                    f"Did not receive any pose update from the Riegl. No correction applied to accumulated drift."
+                )
+                return False
+            ps = response.pose
 
         transform_map_to_base_link = TransformStamped()
         transform_map_to_base_link.header = ps.header
@@ -180,7 +157,7 @@ class ExecutePlannedPath(Node):
         transform_map_to_base_link.transform.translation.y = ps.pose.position.y
         transform_map_to_base_link.transform.translation.z = ps.pose.position.z
         transform_map_to_base_link.transform.rotation = ps.pose.orientation
-
+        self.transform_map_to_base_link = transform_map_to_base_link
         print("transform_map_to_base_link")
         print(transform_map_to_base_link)
         print()
@@ -203,8 +180,10 @@ class ExecutePlannedPath(Node):
         print()
 
         # Compose the transforms
-        composed_transform_stamped = self.compose_transforms(
-            transform_map_to_base_link, transform_base_link_to_odom
+        composed_transform_stamped = compose_transforms(
+            transform_map_to_base_link,
+            transform_base_link_to_odom,
+            self.get_clock().now().to_msg()
         )
 
         print("composed_transform_stamped")
@@ -218,26 +197,46 @@ class ExecutePlannedPath(Node):
         return True
 
     def navigate_to_next_waypoint(self):
-        waypoint = self.path.poses[self.cur_wpt_idx]
+        waypoint = self.map_waypoints[self.cur_wpt_idx]
         self.get_logger().info(
-            f"Navigating to the next waypoint {self.cur_wpt_idx}: ({waypoint.pose.position.x:.2f}, {waypoint.pose.position.y:.2f} in {waypoint.header.frame_id})"
+            f"Navigating to the next waypoint {self.cur_wpt_idx}: ({waypoint[0]:.2f}, {waypoint[1]:.2f} in map)"
         )
 
         follow_path_goal = FollowPath.Goal()
         follow_path_goal.path.header.frame_id = "odom"
-        follow_path_goal.path.poses.append(waypoint)
+        follow_path_goal.path.poses = densify_path(
+            (
+                self.transform_map_to_base_link.transform.translation.x,
+                self.transform_map_to_base_link.transform.translation.y,
+                0.0
+            ),
+            waypoint,
+            transform_map_to_base_link.header
+        )
+
         self.follow_path_action_client.wait_for_server()
-        self.follow_path_future = self.follow_path_action_client.send_goal_async(follow_path_goal)
+        self.follow_path_future_goal = self.follow_path_action_client.send_goal_async(follow_path_goal)
 
         self.cur_state = State.WAIT_TO_REACH_WAYPOINT
 
     def wait_to_reach_waypoint(self):
-        if self.follow_path_future.done():
+        if self.follow_path_future_goal is not None and self.follow_path_future_goal.done():
+            goal_handle = future.result()
+            if not goal_handle.accepted:
+                self.get_logger().info(f"Waypoint {self.cur_wpt_idx} Goal rejected. Trying again...")
+                self.cur_state = State.SEND_WAYPOINT
+                return
+
+            self.follow_path_future_result = goal_handle.get_result_async()
+            self.follow_path_future_goal = None
+
+        if self.follow_path_future_result is not None and self.follow_path_future_result.done():
+            self.follow_path_future_result = None
             self.get_logger().info(f"Reached waypoint {self.cur_wpt_idx}.")
             self.cur_wpt_idx += 1
-            if (self.cur_wpt_idx) == len(self.path.poses):
+            if (self.cur_wpt_idx) == len(self.map_waypoints):
                 self.get_logger().info(f"Done with plan execution.")
-                self.path = None
+                self.map_waypoints = None
                 self.cur_state = State.WAIT_FOR_PATH
             else:
                 self.cur_state = State.RIEGL_SCAN
@@ -264,10 +263,6 @@ def main(args=None):
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
-
-    stop_goal_pose = PoseStamped()
-    stop_goal_pose.header.frame_id = "base_link"
-    node.goal_pub.publish(stop_goal_pose)
 
     node.destroy_node()
     rclpy.shutdown()
