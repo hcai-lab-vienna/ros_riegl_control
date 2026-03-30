@@ -63,8 +63,8 @@ class ExecutePlannedPath(Node):
             self.get_pose = self.create_client(GetPose, self.pose_service)
 
         self.map_waypoints = [
-            (1.0, 0.0, 0.0),
-            (2.0, 0.0, 0.0),
+            (0., -7.0, 0.0),
+            (0., 0.0, 0.0),
         ]
         # for i in range(2):
         #     next_waypoint = PoseStamped()
@@ -123,7 +123,7 @@ class ExecutePlannedPath(Node):
     def riegl_map_update(self):
         if self.fake_riegl:
             # Fake it using odometry
-            received, msg = wait_for_message(Odometry, self, "/nav/odom")
+            received, msg = wait_for_message(Odometry, self, "/odom")
 
             if not received:
                 self.get_logger().warning(f"Did not receive any pose update from the Odometry (faking Riegl). No correction applied to accumulated drift.")
@@ -211,7 +211,7 @@ class ExecutePlannedPath(Node):
                 0.0
             ),
             waypoint,
-            transform_map_to_base_link.header
+            self.transform_map_to_base_link.header
         )
 
         self.follow_path_action_client.wait_for_server()
@@ -221,7 +221,7 @@ class ExecutePlannedPath(Node):
 
     def wait_to_reach_waypoint(self):
         if self.follow_path_future_goal is not None and self.follow_path_future_goal.done():
-            goal_handle = future.result()
+            goal_handle = self.follow_path_future_goal.result()
             if not goal_handle.accepted:
                 self.get_logger().info(f"Waypoint {self.cur_wpt_idx} Goal rejected. Trying again...")
                 self.cur_state = State.SEND_WAYPOINT

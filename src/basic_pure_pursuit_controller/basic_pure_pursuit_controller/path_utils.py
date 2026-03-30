@@ -80,7 +80,7 @@ def interpolate_segment(p0, p1, ds):
 
 
 def densify_path(p0, p1, header, spacing=0.1):
-    pts = interpolate_segment(p0, p1, spacing)
+    pts = interpolate_segment(p0[:2], p1[:2], spacing)
     poses = []
     for i in range(len(pts)-1):
         px, py = pts[i]
