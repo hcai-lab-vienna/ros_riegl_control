@@ -7,3 +7,6 @@
 [submodule "src/ugv_sdk"]
 	path = src/ugv_sdk
 	url = https://github.com/agilexrobotics/ugv_sdk.git
+[submodule "src/ros_imu"]
+	path = src/ros_imu
+	url = https://github.com/hcai-lab-vienna/ros_imu.git
