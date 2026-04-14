@@ -1,7 +1,7 @@
 map_server:
   ros__parameters:
     #yaml_filename: "/hcai_nav2_bringup/maps/empty.yaml" Set with launch params
-    frame_id: 'odom'
+    frame_id: "odom"
 
 # Controller Server
 controller_server:
@@ -17,11 +17,11 @@ controller_server:
     odom_topic: "/odom"
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      max_linear_vel: 0.4
+      max_linear_vel: 0.25
       lookahead_dist: 0.8
       min_lookahead_dist: 0.3
       max_lookahead_dist: 1.5
-      rotate_to_heading_angular_vel: 1.8
+      rotate_to_heading_angular_vel: 1.1
       use_velocity_scaled_lookahead_dist: true
       enable_obstacle_checking: true
       use_interpolation: true

@@ -10,6 +10,7 @@ from nav_msgs.msg import Odometry, Path
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.wait_for_message import wait_for_message
+from riegl_vz_interfaces.srv import GetPose
 from std_srvs.srv import Trigger
 from tf2_ros import (
     Buffer,
@@ -38,6 +39,7 @@ class ExecutePlannedPath(Node):
         self.declare_parameter("follow_path_server", "/follow_path")
         self.declare_parameter("scan_service", "/scan")
         self.declare_parameter("pose_service", "/get_vop")
+        # self.declare_parameter("pose_service", "/get_sopv")
         self.declare_parameter("odom_frame_id", "odom")
         self.declare_parameter("map_frame_id", "map")
         self.declare_parameter("fake_riegl", False)
@@ -58,13 +60,29 @@ class ExecutePlannedPath(Node):
 
         self.follow_path_action_client = ActionClient(self, FollowPath, self.follow_path_server)
         self.scan_trigger = self.create_client(Trigger, self.scan_service)
-        if not self.fake_riegl:
-            from riegl_vz_interfaces.srv import GetPose
-            self.get_pose = self.create_client(GetPose, self.pose_service)
+
+        self.get_pose = self.create_client(GetPose, self.pose_service)
 
         self.map_waypoints = [
-            (0., -7.0, 0.0),
-            (0., 0.0, 0.0),
+            # (0., -7.0, 0.0),
+            # (0., 0.0, 0.0),
+            # (0.,0.,0.1),
+
+            (6., 0., 0.2),
+            (6., 5., 03.),
+            (0., 5., 04.),
+            (-2.5, 5., 05.),
+            (-2.5, 0, 06.),
+            (0.,0.,07.),
+
+            # (0., 6., 0.2),
+            # (-5., 6., 03.),
+            # (-5., 0., 04.),
+            # (-5., -2.5, 05.),
+            # (0., -2.5, 06.),
+            # (0.,0.,07.),
+
+            # (0.,0.,01.),
         ]
         # for i in range(2):
         #     next_waypoint = PoseStamped()
@@ -169,6 +187,13 @@ class ExecutePlannedPath(Node):
                 rclpy.time.Time(),
                 timeout=rclpy.duration.Duration(seconds=4.0),
             )
+
+            self.transform_odom_to_base_link = self.tf_buffer.lookup_transform(
+                "odom",
+                "base_link",
+                rclpy.time.Time(),
+                timeout=rclpy.duration.Duration(seconds=4.0),
+            )
         except (LookupException, ConnectivityException):
             self.get_logger().error(
                 f"Failed to find transform from 'base_link' to 'odom'"
@@ -179,19 +204,20 @@ class ExecutePlannedPath(Node):
         print(transform_base_link_to_odom)
         print()
 
+
         # Compose the transforms
-        composed_transform_stamped = compose_transforms(
+        self.composed_transform_stamped = compose_transforms(
             transform_map_to_base_link,
             transform_base_link_to_odom,
             self.get_clock().now().to_msg()
         )
 
-        print("composed_transform_stamped")
-        print(composed_transform_stamped)
+        print("self.composed_transform_stamped")
+        print(self.composed_transform_stamped)
         print()
 
         # Broadcast map-odom tf transform
-        self.tf_static_broadcaster.sendTransform(composed_transform_stamped)
+        self.tf_static_broadcaster.sendTransform(self.composed_transform_stamped)
 
         self.cur_state = State.SEND_WAYPOINT
         return True
@@ -202,16 +228,32 @@ class ExecutePlannedPath(Node):
             f"Navigating to the next waypoint {self.cur_wpt_idx}: ({waypoint[0]:.2f}, {waypoint[1]:.2f} in map)"
         )
 
+        print("start", (
+            self.transform_odom_to_base_link.transform.translation.x,
+            self.transform_odom_to_base_link.transform.translation.y,
+            0.0
+        ))
+        print("end", (
+            waypoint[0] - self.composed_transform_stamped.transform.translation.x,
+            waypoint[1] - self.composed_transform_stamped.transform.translation.y,
+            0.0
+        ))
+
         follow_path_goal = FollowPath.Goal()
         follow_path_goal.path.header.frame_id = "odom"
         follow_path_goal.path.poses = densify_path(
             (
-                self.transform_map_to_base_link.transform.translation.x,
-                self.transform_map_to_base_link.transform.translation.y,
+                self.transform_odom_to_base_link.transform.translation.x,
+                self.transform_odom_to_base_link.transform.translation.y,
                 0.0
             ),
-            waypoint,
-            self.transform_map_to_base_link.header
+            (
+                waypoint[0] - self.composed_transform_stamped.transform.translation.x,
+                waypoint[1] - self.composed_transform_stamped.transform.translation.y,
+                0.0
+            ),
+            self.transform_odom_to_base_link.header,
+            final_heading= 1.57 if self.cur_wpt_idx < len(self.map_waypoints) - 1 else None
         )
 
         self.follow_path_action_client.wait_for_server()

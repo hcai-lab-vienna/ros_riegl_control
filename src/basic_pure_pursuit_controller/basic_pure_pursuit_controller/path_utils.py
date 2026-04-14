@@ -1,3 +1,4 @@
+import copy
 import math
 import tf_transformations as tf_trans
 
@@ -79,7 +80,7 @@ def interpolate_segment(p0, p1, ds):
     return pts
 
 
-def densify_path(p0, p1, header, spacing=0.1):
+def densify_path(p0, p1, header, final_heading=None, spacing=0.1):
     pts = interpolate_segment(p0[:2], p1[:2], spacing)
     poses = []
     for i in range(len(pts)-1):
@@ -97,5 +98,10 @@ def densify_path(p0, p1, header, spacing=0.1):
         ps.pose.position.y = y
         ps.pose.orientation = yaw_to_quat(yaw)
         poses.append(ps)
+
+    if final_heading is not None:
+        final_ps = copy.deepcopy(poses[-1])
+        final_ps.pose.orientation = yaw_to_quat(final_heading)
+        poses.append(final_ps)
 
     return poses
