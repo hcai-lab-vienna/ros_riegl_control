@@ -10,3 +10,9 @@
 [submodule "src/ros_imu"]
 	path = src/ros_imu
 	url = https://github.com/hcai-lab-vienna/ros_imu.git
+[submodule "src/rslidar_sdk"]
+	path = src/rslidar_sdk
+	url = https://github.com/RoboSense-LiDAR/rslidar_sdk
+[submodule "src/rslidar_msg"]
+	path = src/rslidar_msg
+	url = https://github.com/RoboSense-LiDAR/rslidar_msg.git
