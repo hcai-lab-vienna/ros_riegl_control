@@ -53,4 +53,4 @@ qtcreator-*
 CATKIN_IGNORE
 
 # RIEGL fix
-src/ros-riegl-vz/*
+src/ros-riegl-vz
