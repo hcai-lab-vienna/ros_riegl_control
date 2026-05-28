@@ -1,5 +1,10 @@
 # ROS2 RIEGL Controller
 
+## TODO
+- [ ] rosbag recording
+- [ ] save logging
+- [ ] "mounted on robot" setting
+
 ## Install
 Follow [ros-riegl-vz](https://github.com/riegllms/ros-riegl-vz)
 Requirements for ROS2 jazzy:
