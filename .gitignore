@@ -52,5 +52,4 @@ qtcreator-*
 # Catkin custom files
 CATKIN_IGNORE
 
-# RIEGL fix
-src/ros-riegl-vz
+fixes
