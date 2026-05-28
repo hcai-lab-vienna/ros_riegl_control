@@ -20,10 +20,6 @@ Then do:
 ```bash
 pip3 install --user --break-system-packages src/ros-riegl-vz/librdb/riegl.rdb-2.5.3-py3-none-linux_x86_64.whl
 ```
-and run the following script in project root after building to fix a issue in the riegl repo:
-```bash
-./fix_riegl_typo.sh
-```
 
 
 ## Configuration
